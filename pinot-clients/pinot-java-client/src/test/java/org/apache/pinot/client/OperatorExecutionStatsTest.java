@@ -29,7 +29,7 @@ import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
 
-public class ExecutionStatsTest {
+public class OperatorExecutionStatsTest {
 
   private JsonNode _mockBrokerResponse;
 

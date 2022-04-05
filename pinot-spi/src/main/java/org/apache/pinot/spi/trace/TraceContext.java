@@ -18,8 +18,14 @@
  */
 package org.apache.pinot.spi.trace;
 
-public interface Scope extends AutoCloseable {
+import java.util.Deque;
 
-  @Override
-  void close();
+
+public interface TraceContext {
+
+  long getTraceId();
+
+  void setTraceId(long traceId);
+
+  Deque<ExecutionRecording> getRecordings();
 }

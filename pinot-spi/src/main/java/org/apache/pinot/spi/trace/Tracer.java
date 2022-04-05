@@ -27,4 +27,9 @@ public interface Tracer {
     void register(long requestId);
 
     OperatorExecution startOperatorExecution(Class<?> clazz);
+
+    /**
+     * @return the active execution
+     */
+    ExecutionRecording activeRecording();
 }

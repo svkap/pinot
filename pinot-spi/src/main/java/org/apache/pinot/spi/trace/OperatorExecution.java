@@ -18,5 +18,5 @@
  */
 package org.apache.pinot.spi.trace;
 
-public interface OperatorExecution extends Scope, ExecutionRecording {
+public interface OperatorExecution extends Execution, ExecutionRecording {
 }

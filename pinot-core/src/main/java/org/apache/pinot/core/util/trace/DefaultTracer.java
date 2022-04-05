@@ -18,10 +18,14 @@
  */
 package org.apache.pinot.core.util.trace;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import org.apache.pinot.spi.data.FieldSpec;
+import org.apache.pinot.spi.trace.ExecutionRecording;
 import org.apache.pinot.spi.trace.FilterType;
 import org.apache.pinot.spi.trace.OperatorExecution;
 import org.apache.pinot.spi.trace.Phase;
+import org.apache.pinot.spi.trace.TraceContext;
 import org.apache.pinot.spi.trace.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +34,7 @@ import org.slf4j.LoggerFactory;
 public class DefaultTracer implements Tracer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultTracer.class);
+  private static final ThreadLocal<Deque<ExecutionRecording>> STACK = ThreadLocal.withInitial(ArrayDeque::new);
 
   private static class NoOpExecution implements OperatorExecution {
 
@@ -72,9 +77,11 @@ public class DefaultTracer implements Tracer {
 
     private final long _startTimeMillis = System.currentTimeMillis();
     private final Class<?> _operator;
+    private final Runnable _onClose;
 
-    public MillisExecution(Class<?> operator) {
+    public MillisExecution(Class<?> operator, Runnable onClose) {
       _operator = operator;
+      _onClose = onClose;
     }
 
     @Override
@@ -84,17 +91,38 @@ public class DefaultTracer implements Tracer {
       if (LOGGER.isTraceEnabled()) {
         LOGGER.trace("Time spent in {}: {}", operatorName, duration);
       }
-      TraceContext.logTime(operatorName, duration);
+      org.apache.pinot.core.util.trace.TraceContext.logTime(operatorName, duration);
+      _onClose.run();
     }
   }
 
   @Override
   public void register(long requestId) {
-    TraceContext.register(requestId);
+    org.apache.pinot.core.util.trace.TraceContext.register(requestId);
   }
 
   @Override
   public OperatorExecution startOperatorExecution(Class<?> operatorClass) {
-    return TraceContext.traceEnabled() ? new MillisExecution(operatorClass) : NO_OP_SPAN;
+    if (org.apache.pinot.core.util.trace.TraceContext.traceEnabled()) {
+      Deque<ExecutionRecording> stack = getStack();
+      MillisExecution execution = new MillisExecution(operatorClass, stack::removeLast);
+      stack.addLast(execution);
+      return execution;
+    }
+    return NO_OP_SPAN;
+  }
+
+  @Override
+  public ExecutionRecording activeRecording() {
+    Deque<ExecutionRecording> stack = getStack();
+    return stack.isEmpty() ? NO_OP_SPAN : stack.peekLast();
+  }
+
+  private Deque<ExecutionRecording> getStack() {
+    Thread thread = Thread.currentThread();
+    if (thread instanceof TraceContext) {
+      return ((TraceContext) thread).getRecordings();
+    }
+    return STACK.get();
   }
 }
